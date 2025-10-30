@@ -3,4 +3,11 @@ pandas
 matplotlib
 astropy
 scipy
+wget
+seaborn
+requests
+scikit-image
+
 git+https://github.com/danielrd6/ifscube.git
+git+https://github.com/sciserver/SciScript-Python.git#subdirectory=py3
+
