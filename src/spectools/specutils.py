@@ -9,7 +9,7 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy.convolution import convolve, Gaussian1DKernel
-from spectools.spectrum_io import interpolate_spec
+from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from scipy.ndimage import label
@@ -74,96 +74,6 @@ def match_galaxies(splus, survey):
     return df_common_filtered
 
 
-def convert_sdss_fits_to_txt(file):
-    """
-    Read an SDSS spectrum FITS file and prepare it for STARLIGHT input.
-
-    The function extracts flux, wavelength, and errors from the SDSS file,
-    corrects the spectrum to the rest frame using the most common redshift,
-    and interpolates it with `interpolate_spec`.
-
-    Parameters
-    ----------
-    file : str
-        Path to the SDSS spectrum file.
-
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame with rest-frame wavelength, flux, and flux error.
-        Returns None if the filename does not match the expected format.
-    """
-
-    spec = fits.open(file)
-    spec[1].data
-
-    flux    = spec[1].data['flux']
-    loglam  = spec[1].data['loglam']
-    ivar    = spec[1].data['ivar']
-
-    eflux = 1 / np.sqrt(ivar)
-    wavelength = 10**loglam
-
-    #Correcting waveleght to the rest frame.
-    redshift = spec['SPZLINE'].data['LINEZ']
-    redshift = redshift[redshift > 0]
-
-    # z = round(stats.mode(redshift)[0], 5)
-    moda = stats.mode(redshift)[0][0]
-    redshift = round(float(moda), 5)
-
-    rest_wave = wavelength / (1 + redshift)
-
-    df = interpolate_spec(wave=rest_wave, flux=flux, eflux=eflux)
-    return df
-
-
-def create_starlight_input_file(data_directory='./../A194/', n_files: int = 500, 
-                                library_directory= './CB19CSFBasesDir/', 
-                                library= 'CB19_16x5',
-                                IsErrSpecAvailable: bool = False, 
-                                IsFlagSpecAvailable: bool = False, 
-                                list_galaxies: list = []):
-
-    library = 'CB19_16x5'
-    mask = "mask_sdss.gm"
-    if library == 'CB19_16x5':
-        template = "CBASE.PARSEC.chab.16x5.all"
-    elif library == 'CB19_16x12':
-        template = "CBASE.cb19.PARSEC.chab.16x12.man.all"
-
-    conf_file = f"""{n_files}                                        [Number of fits to run]
-{library_directory}                                [base_dir]
-{data_directory}                         [obs_dir]
-./                          [mask_dir]
-{data_directory}                         [out_dir]
--2007200                                         [your phone number]
-5250.0                                           [llow_SN]   lower-lambda of S/N window
-5260.0                                           [lupp_SN]   upper-lambda of S/N window
-3569.0                                           [Olsyn_ini] lower-lambda for fit
-9650.0                                           [Olsyn_fin] upper-lambda for fit
-1.0                                              [Odlsyn]    delta-lambda for fit
-1.0                                              [fscale_chi2] fudge-factor for chi2
-FIT                                              [FIT/FXK] Fit or Fix kinematics
-{1 if IsErrSpecAvailable else 0}                                                [IsErrSpecAvailable]  1/0 = Yes/No
-{1 if IsFlagSpecAvailable else 0}                                                [IsFlagSpecAvailable] 1/0 = Yes/No
-"""
-
-    # Componentes fixos
-    fixos = [f"StCv04.C11.config", template, 
-             f'{mask}', "CCM", "0.0", "150.0"]
-    
-
-    for file in list_galaxies:
-        file_name = file.split('.')[0] # nome do arquivo sem extensão
-        out_name = f"{file_name}_{library}"
-        conf_file += f"{file}  {'  '.join(fixos)}  {out_name}\n"
-        # print(conf_file)
-        # conf_file += "\n"
-
-    return conf_file
-
-
 def run_starlight(starlight_dir):
     """
     Run the STARLIGHT software with the given configuration file.
@@ -178,6 +88,69 @@ def run_starlight(starlight_dir):
     directory = Path(starlight_dir)
     subprocess.run(f"./StarlightChains_v04.exe < config.in ", shell=True, cwd=directory)
 
+
+def select_do_fit(galaxy, value:int = 3, hb_detected: bool = False):
+    """
+    Decide whether a galaxy spectrum should be fitted.
+
+    Opens the FITS file, measures noise and line strengths in predefined
+    wavelength windows, and checks if emission lines (Hα, and optionally Hβ)
+    are strong enough compared to the local noise.
+
+    Parameters
+    ----------
+    galaxy : str
+        Path to the galaxy FITS file.
+    value : int, optional
+        Detection threshold multiplier for line significance (default is 3).
+    hb_detected : bool, optional
+        If True, requires both Hβ and Hα detection; otherwise only Hα.
+
+    Returns
+    -------
+    bool
+        True if the spectrum meets the detection criteria, False otherwise.
+    """
+
+    a = fits.open(galaxy)
+    
+    header = a["OBSERVED"].header
+    gas = a['OBSERVED'].data
+
+    bb_window   = [3600, 3700]
+    oii_window  = [3700, 3760]
+
+    blue_window = [4600, 4700]
+    oiii_window = [4920, 5100]
+    hb_window   = [4800, 4920]
+
+    red_window  = [6100, 6200]
+    ha_window   = [6450, 6650]
+    sii_window  = [6700, 6780]
+
+    lam     = (np.arange(0, gas.shape[0]) * header['cdelt1'] + header['crval1'])
+
+    std_bb      = np.std(gas[(lam >= bb_window[0]) & (lam <= bb_window[1])])
+    std_blue    = np.std(gas[(lam >= blue_window[0]) & (lam <= blue_window[1])])
+    std_red     = np.std(gas[(lam >= red_window[0]) & (lam <= red_window[1])])
+
+    oii_max     = np.max(gas[(lam >= oii_window[0]) & (lam <= oii_window[1])])
+    hb_max      = np.max(gas[(lam >= hb_window[0]) & (lam <= hb_window[1])])
+    oiii_max    = np.max(gas[(lam >= oiii_window[0]) & (lam <= oiii_window[1])])
+    ha_max      = np.max(gas[(lam >= ha_window[0]) & (lam <= ha_window[1])])
+    sii_max     = np.max(gas[(lam >= sii_window[0]) & (lam <= sii_window[1])])
+
+    if hb_detected:
+        if hb_max > value* std_blue and ha_max > value* std_red:
+            return True
+        else:
+            return False
+    else:
+        if ha_max > value* std_red:
+            return True
+        else:
+            return False
+        
 
 def sort_by_pattern(file):
     name = file.stem  # sem extensão
@@ -197,151 +170,60 @@ def sort_by_pattern(file):
     return (2, name)
 
 
-def read_starlight_output(files: list[str], filepath: str) -> dict:
+def interpolate_spec(wave, flux, eflux):
     """
-    Parse and extract information from STARLIGHT output files.
-
-    This function reads one or more STARLIGHT output files, extracting both
-    metadata and synthetic spectrum information. For each galaxy (identified
-    by the prefix of the filename), the function stores:
-    
-    - Metadata key-value pairs parsed from lines in the format `value [description]`.
-    - Synthetic spectrum data, including wavelength, observed flux, model flux,
-      and weights.
+    Interpolates a spectrum using linear interpolation.
 
     Parameters
     ----------
-    files : list of str
-        List of STARLIGHT output filenames to be read.
-        Each filename is expected to start with the galaxy name
-        (e.g., ``NGC1234_output.txt`` → galaxy name = ``NGC1234``).
-    filepath : str
-        Path to the directory containing the STARLIGHT output files.
+    wave : array
+        The wavelengths of the spectrum.
+    flux : array
+        The fluxes of the spectrum.
+    eflux : array
+        The errors of the fluxes of the spectrum.
 
     Returns
     -------
-    dict
-        A nested dictionary with the following structure:
-        
-        {
-            galaxy_name: {
-                'metadata': dict
-                    Key-value pairs extracted from the header section.
-                'wavelenght': list of float
-                    Wavelength values of the synthetic spectrum.
-                'f_obs': list of float
-                    Observed flux values.
-                'f_model': list of float
-                    Model flux values.
-                'weight': list of float
-                    Weights associated with each wavelength point.
-            },
-            ...
-        }
+    df : pandas.DataFrame
+        A DataFrame containing the interpolated spectrum.
+
+    Notes
+    -----
+    The errors are also interpolated and filled with the minimum error
+    value in case of non-finite values.
     """
 
-    results_all = {}
-    reading_spectrum = False
+    #Cria novo eixo de comprimento de onda com passo de 1 Å
+    wavelength_linear = np.arange(np.ceil(wave.min()), np.floor(wave.max()) + 1, 1)
 
-    for file in files:
-        galaxy_name = file.split('_')[0]
+    # Interpola o fluxo
+    interp_flux = interp1d(wave, flux, kind='linear', bounds_error=False, fill_value="extrapolate")
+    interp_error = interp1d(wave, eflux, kind='linear', bounds_error=False, fill_value="extrapolate")
 
-        if galaxy_name not in results_all:
-            results_all[galaxy_name] = {}
-    
-        results_all[galaxy_name] = {
-            'metadata': {},
-            'wavelenght': [],
-            'f_obs': [],
-            'f_model': [],
-            'weight': [],
-            'residual': []
-        }
+    flux_linear = interp_flux(wavelength_linear)
+    error_linear = interp_error(wavelength_linear)
 
-        with open(filepath+file, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()
+    error_linear = np.where(~np.isfinite(error_linear), min(eflux), error_linear)
 
-            for idx, line in enumerate(lines):
-                line = line.strip()
+    df = pd.DataFrame({'wavelength': wavelength_linear, 'flux': flux_linear, 'flux_error': error_linear}) #, 'flux_error': flux_error})
 
-                match = re.match(r'^(.*?)\[(.*)\]', line)
-                if match:
-                    raw_values, description = match.groups()
-                    raw_values = raw_values.strip()
-                    description = description.strip()
-            
-                    values = raw_values.split()
-                    if len(values) == 1:
-                        value = values[0]  # valor único como string
-                    else:
-                        value = values  # lista de strings
-            
-                    results_all[galaxy_name]['metadata'][description] = value
-
-                elif line.startswith('## Synthetic spectrum '):  # Início dos espectros # elif line:  # Início dos espectros
-                    reading_spectrum = True
-                    continue
-                
-                elif reading_spectrum:
-                    parts = line.split()
-                    if len(parts) == 4:
-                        spectrum = list(map(float, parts))
-                        results_all[galaxy_name]['wavelenght'].append(spectrum[0])
-                        results_all[galaxy_name]['f_obs'].append(spectrum[1])
-                        results_all[galaxy_name]['f_model'].append(spectrum[2])
-                        results_all[galaxy_name]['weight'].append(spectrum[3])
-                    else:
-                        reading_spectrum = False  # Parar de ler se a linha mudar o formato
-                    continue  # Já tratou essa linha, então pula pro próximo loop
-
-    return results_all
+    return df
 
 
-def create_new_fits_from_starlight(data):
-    """
-    Create a FITS file from STARLIGHT output data.
+def make_line(rest_wavelength, velocity=None, sigma=None, amplitude="peak, 0:", k_group=None):
+    line = {
+        "rest_wavelength": rest_wavelength,
+        "amplitude": amplitude,
+    }
+    if velocity is not None:
+        line["velocity"] = velocity
+    if sigma is not None:
+        line["sigma"] = sigma
+    if k_group is not None:
+        line["k_group"] = k_group
+    return line
 
-    Builds a multi-extension FITS with observed spectrum, stellar model,
-    and gas component (observed - stellar). Metadata is used to define
-    the wavelength axis in the header.
-
-    Parameters
-    ----------
-    data : dict
-        STARLIGHT output with keys 'f_obs', 'f_model', and 'metadata'.
-
-    Returns
-    -------
-    astropy.io.fits.HDUList
-        FITS object with OBSERVED, STELLAR, and GAS extensions.
-    """
-
-    observed    = data['f_obs']
-    stellar     = data['f_model']
-    gas         = np.array(observed) - np.array(stellar)
-
-    hdu = fits.Header()
-    crval = float(data['metadata']['l_ini (A)'])
-    cdelt = float(data['metadata']['dl    (A)'])
-    hdu['NAXIS'] = 1
-    hdu['CRPIX1'] = 1 
-    hdu['CRVAL1'] = crval #/ (1 + redshift)
-    hdu['CDELT1'] = cdelt
-    hdu['CTYPE1'] = 'WAVE'
-    hdu['CUNIT1'] = 'Angstrom'
-
-    # Base extensions
-    extensions = [
-        (observed, "OBSERVED"),
-        (stellar, "STELLAR"),
-        (gas, "GAS"),
-    ]
-
-    # Build HDUList
-    hdus = [fits.ImageHDU(data=dataa, header=hdu, name=name) 
-            for dataa, name in extensions]
-
-    return fits.HDUList([fits.PrimaryHDU(), *hdus])
 
 
 def plot_starlight_spectrum(data):
@@ -500,3 +382,19 @@ def plot_ifscube_spectra(directory, galaxy):
     
     fig.tight_layout()
     return fig
+
+
+def emission_lines():
+    return {
+    "Hb_4861": 4861.325,
+    "Ha_6563": 6562.8,
+    "OII_3726": 3726.032,
+    "OII_3729": 3728.815,
+    "OIII_4363": 4363.210,
+    "NII_6583": 6583.46,
+    "NII_6548": 6548.04,
+    "OIII_5007": 5006.84,
+    "OIII_4959": 4958.91,
+    "SII_6716": 6716.44,
+    "SII_6731": 6730.82,
+    }
