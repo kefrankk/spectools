@@ -1,0 +1,18 @@
+3                                        [Number of fits to run]
+./CB19CSFBasesDir/                                [base_dir]
+./../A194/                         [obs_dir]
+./                          [mask_dir]
+./../A194/                         [out_dir]
+-2007200                                         [your phone number]
+5250.0                                           [llow_SN]   lower-lambda of S/N window
+5260.0                                           [lupp_SN]   upper-lambda of S/N window
+3569.0                                           [Olsyn_ini] lower-lambda for fit
+9650.0                                           [Olsyn_fin] upper-lambda for fit
+1.0                                              [Odlsyn]    delta-lambda for fit
+1.0                                              [fscale_chi2] fudge-factor for chi2
+FIT                                              [FIT/FXK] Fit or Fix kinematics
+0                                                [IsErrSpecAvailable]  1/0 = Yes/No
+0                                                [IsFlagSpecAvailable] 1/0 = Yes/No
+spec-1079-52621-0424.txt  StCv04.C11.config  CBASE.PARSEC.chab.16x5.all  mask_sdss.gm  CCM  0.0  150.0  spec-1079-52621-0424_CB19_16x5
+spec-f2ace614-8708-11ef-b7bb-525400f334e1.txt  StCv04.C11.config  CBASE.PARSEC.chab.16x5.all  mask_sdss.gm  CCM  0.0  150.0  spec-f2ace614-8708-11ef-b7bb-525400f334e1_CB19_16x5
+spec-1497-52886-0498.txt  StCv04.C11.config  CBASE.PARSEC.chab.16x5.all  mask_sdss.gm  CCM  0.0  150.0  spec-1497-52886-0498_CB19_16x5

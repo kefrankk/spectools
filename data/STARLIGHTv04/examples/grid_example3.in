@@ -1,0 +1,30 @@
+8                                               [Number of fits to run]
+/home/cid/STARLIGHTv04/BasesDir/                [base_dir]
+/home/cid/STARLIGHTv04/                         [obs_dir]
+/home/cid/STARLIGHTv04/                         [mask_dir]
+/home/cid/STARLIGHTv04/                         [out_dir]
+-1234567                                        [your phone number]
+4730.0                                          [llow_SN]   lower-lambda of S/N window
+4780.0                                          [lupp_SN]   upper-lambda of S/N window
+3400.0                                          [Olsyn_ini] lower-lambda for fit
+5450.0                                          [Olsyn_fin] upper-lambda for fit
+1.0                                             [Odlsyn]    delta-lambda for fit
+1.0                                             [fscale_chi2] fudge-factor for chi2
+FIT                                             [FIT/FXK] Fit or Fix kinematics
+0                                               [IsErrSpecAvailable]  1/0 = Yes/No
+0                                               [IsFlagSpecAvailable] 1/0 = Yes/No
+n5377x.nuc.txt.DR   StCv04.C11.config   Base.BC03.N   Masks.EmLines.SDSS.gm   CCM   0.0   150.0   n5377x.nuc.txt.DR.sc4.C11.gm.CCM.BN
+n5377x.nuc.txt.DR   StCv04.C99.config   Base.BC03.N   Masks.EmLines.SDSS.gm   CCM   0.0   150.0   n5377x.nuc.txt.DR.sc4.C99.gm.CCM.BN
+n5377x.nuc.txt.DR   StCv04.C11.config   Base.BC03.S   Masks.EmLines.SDSS.gm   CCM   0.0   150.0   n5377x.nuc.txt.DR.sc4.C11.gm.CCM.BS
+n5377x.nuc.txt.DR   StCv04.C99.config   Base.BC03.S   Masks.EmLines.SDSS.gm   CCM   0.0   150.0   n5377x.nuc.txt.DR.sc4.C99.gm.CCM.BS
+n5377x.nuc.txt.DR   StCv04.C11.config   Base.BC03.N   Masks.EmLines.SDSS.gm   CAL   0.0   150.0   n5377x.nuc.txt.DR.sc4.C11.gm.CAL.BN
+n5377x.nuc.txt.DR   StCv04.C99.config   Base.BC03.N   Masks.EmLines.SDSS.gm   CAL   0.0   150.0   n5377x.nuc.txt.DR.sc4.C99.gm.CAL.BN
+n5377x.nuc.txt.DR   StCv04.C11.config   Base.BC03.S   Masks.EmLines.SDSS.gm   CAL   0.0   150.0   n5377x.nuc.txt.DR.sc4.C11.gm.CAL.BS
+n5377x.nuc.txt.DR   StCv04.C99.config   Base.BC03.S   Masks.EmLines.SDSS.gm   CAL   0.0   150.0   n5377x.nuc.txt.DR.sc4.C99.gm.CAL.BS
+
+
+
+A LLAGN from CF et al 2004 & Gonzalez Delgado et al 2004 fitted with
+Base.BC03.N & Base.BC03.S, CCM & CAL extinction laws different
+configs... (C11 & C99)
+Cid@Lagoa - 29/March/2007
