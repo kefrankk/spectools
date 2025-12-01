@@ -1,4 +1,5 @@
 
+import wget
 import os
 import re
 import subprocess
@@ -15,6 +16,10 @@ import matplotlib as mpl
 from scipy.ndimage import label
 from ifscube.io import line_fit
 from pathlib import Path
+from sparcl.client import SparclClient
+from SciServer import SkyServer
+
+
 
 # Define your own figure configuration here
 font = 12
@@ -30,6 +35,120 @@ plt.rcParams.update({
     'figure.titlesize': font,
     'font.sans-serif': ['Helvetica']
 })
+
+
+def get_desi_spec(cons):
+    """
+    Queries the SPARCL database and returns a pandas DataFrame containing the results of the query.
+
+    Parameters
+    ----------
+    cons : dict
+        A dictionary containing the constraints to be used in the query.
+
+    Returns
+    -------
+    results_desi_dr1 : pandas.DataFrame
+        A pandas DataFrame containing the results of the query.
+    """
+    
+    print(f'Initiating the download of DESI data...')
+    client = SparclClient()
+    
+    out = ['sparcl_id', 'ra', 'dec', 'redshift', 'spectype', 'objtype', 'data_release', 'desiname', 'zcat_nspec', 'targetid']
+
+    print('Running client.find...')
+    found_I = client.find(outfields=out, constraints=cons, limit=None)
+    
+    # Define the fields to include in the retrieve function
+    inc = ['sparcl_id', 'specid', 'targetid', 'data_release', 'redshift', 'flux',
+           'wavelength', 'model', 'ivar', 'mask', 'wave_sigma', 'spectype', 'ra', 'dec']
+    
+    ids_I = found_I.ids
+    print('Running client.retrieve...')
+    results_I = client.retrieve(uuid_list=ids_I, include=inc, limit=None, dataset_list = ['DESI-DR1'])
+    
+    results_desi_dr1 = pd.json_normalize(results_I.records)
+
+    return results_desi_dr1
+
+
+def search_skyserver(galaxy, SkyServer_DataRelease: str = "DR18"):
+    """
+    Searches the SkyServer database for galaxies that match the RA, DEC and zspec of the given galaxy.      
+
+    Parameters
+    ----------
+    galaxy : pandas.DataFrame
+        DataFrame containing the galaxies to search for.
+    data_release : str
+        The SDSS data release to use for the search.
+
+    Returns
+    -------
+    query : pandas.DataFrame
+        DataFrame containing the results of the search.     
+
+    Notes
+    -----
+    The function builds a SQL query with the given parameters and executes it on the SkyServer database.
+    The query is built using the SpecObj table of the SDSS and the WHERE clause is used to filter the results
+    by the RA, DEC and zspec of the given galaxy.
+    """
+
+    # Get the minimum and maximum RA, DEC and zspec of the given galaxy
+    minra   =min(galaxy['ra'])#-0.01
+    maxra   =max(galaxy['ra'])#+0.01
+    mindec  =min(galaxy['dec'])#-0.01
+    maxdec  =max(galaxy['dec'])#+0.01
+    minz    =min(galaxy['z'])#-0.01
+    maxz    =max(galaxy['z'])#+0.01
+
+    # Build the SQL query
+    SkyServer_TestQuery = "SELECT ra, dec, z, specobjid, class, plate, mjd, fiberid, run2d, bestObjID " \
+                        "from SpecObj " \
+                        f"WHERE class = 'galaxy' AND ra BETWEEN {minra} AND {maxra} AND dec BETWEEN {mindec} AND {maxdec} AND z BETWEEN {minz} AND {maxz} and zWarning = 0" \
+
+    # Execute the query
+    query = SkyServer.sqlSearch(sql=SkyServer_TestQuery, dataRelease=SkyServer_DataRelease)
+
+    return query
+
+
+def download_sdss_spectra(sdss_data, URL, download_dir):
+    """
+    Downloads SDSS spectra based on the provided DataFrame containing spectrum information.
+
+    Parameters
+    ----------
+    sdss_data : pandas.DataFrame
+        DataFrame containing the SDSS spectrum information, including 'run2d', 'plate', 'mjd', and 'fiberid'.
+    URL : str
+        Base URL for downloading the spectra.
+    download_dir : str
+        Directory where the spectra will be downloaded. 
+
+    Returns
+    -------
+    None
+    """
+
+    for _, row in sdss_data.iterrows():
+        run2d = row['run2d']
+        plate = row['plate']
+        fiberid = row['fiberid']
+        mjd = row['mjd']
+
+        spec = f'spec-{str(plate).zfill(4)}-{mjd}-{str(fiberid).zfill(4)}.fits'
+
+        url = f'{URL}/{run2d}/spectra/lite/{str(plate).zfill(4)}/{spec}'
+        if not url:
+            print('No URL found for the spectrum.')
+
+        if spec not in os.listdir(download_dir):
+            wget.download(url, out = download_dir)
+
+
 
 def match_galaxies(splus, survey):
     """
