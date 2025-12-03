@@ -1,4 +1,5 @@
 
+import re
 import os
 import json
 import numpy as np
@@ -17,30 +18,93 @@ def main():
    
     print(f'\n #### Welcome to Spectools workflow #### \n')
 
-    # __file__ = caminho do script atual
-    base_dir = Path(__file__).resolve().parent.parent   # sobe de scripts/ para spectools/
-    data_dir = base_dir / "data/A194/"
+    # __file__ = script actual path
+    # base_dir = Path(__file__).resolve().parent.parent   # sobe de scripts/ para spectools/
+    # data_dir = base_dir / "data/A194/"
+
+    base_dir = Path.home() / "Dropbox/bolsa-FAPESP" 
 
     library_dir     = base_dir / "data/STARLIGHTv04/CB19CSFBasesDir/"
     mask_dir        = base_dir / "data/STARLIGHTv04/"
     starlight_dir   = base_dir / "data/STARLIGHTv04/"
 
-    starlight_output_file   = base_dir / 'data/starlight_output.json'
-    ifscube_output_file     = base_dir / 'data/ifscube_output.json'
+    
+    # table with ra and dec
+    input_file = base_dir / "data/tt5/splus_clusters.csv"
+    splus_data = True
+
+    if splus_data:
+        # define which cluster to analyse from splus data
+        cluster = 'A168'
+
+        data_dir    = base_dir / f"data/tt5/cluster_{cluster}_complete/"
+        tt5_dir     = base_dir / f"data/tt5/"
+
+        starlight_output_file   = base_dir / f'data/tt5/cluster_{cluster}_starlight_output.json'
+        ifscube_output_file     = base_dir / f'data/tt5/cluster_{cluster}_ifscube_output.json'
+        abundance_results_file  = base_dir / f'data/tt5/cluster_{cluster}_abundance_results.json'
+    else:
+        starlight_output_file   = base_dir / f'data/starlight_output.json'
+        ifscube_output_file     = base_dir / f'data/ifscube_output.json'
+        data_dir                = Path(__file__).resolve().parent.parent /  f"data/"
 
 
-    # ---------------------------------------> Downloading data <-----------------------------------------------
+    # ---------------------------------------> Match and downloading data <-----------------------------------------------
+
+    input_data = input_file[input_file['cluster'] == cluster].copy()
+
+
+    match_file_desi = f'match_splusV7_sdssDR18_cluster_{cluster}.csv'
+    match_file_sdss = f'match_splusV7_desiDR1_cluster_{cluster}.csv'
+
+
+    if match_file_desi not in os.listdir(tt5_dir):
+
+        cons = {'spectype': ['GALAXY'],
+                'ra': [min(input_data['ra']), max(input_data['ra'])],
+                'dec': [min(input_data['dec']), max(input_data['dec'])],
+                'redshift':[min(input_data['z']), max(input_data['z'])],
+                'data_release': ['DESI-DR1']}
+        
+        results_desi_dr1 = specutils.get_desi_spec(cons)
+        match_with_desi = specutils.match_galaxies(input_data, results_desi_dr1)
+    else: 
+        match_with_desi = pd.read_csv(tt5_dir + match_file_desi)
+
+ 
+    if match_file_sdss not in os.listdir(tt5_dir):
+        SkyServer_DataRelease = "DR18"   # selecting the SDSS data release
+
+        results_sdss_dr18 = specutils.search_skyserver(input_data, data_release=SkyServer_DataRelease)
+        match_with_sdss = specutils.match_galaxies(input_data, results_sdss_dr18)
+        if match_file_sdss not in os.listdir(tt5_dir):
+            match_with_sdss.to_csv(tt5_dir + match_file_sdss, index=False)
+
+        URL_DR18 = 'https://dr18.sdss.org/sas/dr18/spectro/sdss/redux'
+
+        # Download SDSS spectra
+        specutils.download_sdss_spectra(match_with_sdss, URL=URL_DR18, download_dir=data_dir)
+    else:
+        match_with_sdss = pd.read_csv(tt5_dir + match_file_sdss)
 
 
 
+    # ---------------------------------------> Preparing data for Starlight <-----------------------------------------------
 
+    desi_to_txt = False
+    sdss_to_txt = False
 
+    if desi_to_txt:
+        spectrum_io.to_txt_desi(match_with_desi, data_dir)
 
+    if sdss_to_txt:
+        files = [f for f in os.listdir(data_dir) if f.endswith('.fits')]
 
-
-
-
-
+        for file in files:
+            formatt = re.match(r"spec-(\d+)-(\d+)-(\d+).fits", file)
+            if formatt:
+                df = spectrum_io.convert_sdss_fits_to_txt(data_dir + file)
+                df.to_csv(str(data_dir) + file.replace('.fits', '') + '.txt', sep=' ', header=False, index=False)
 
 
 
@@ -56,10 +120,12 @@ def main():
         print(f' -> Configuring Starlight input \n')
         # Starlight only runs inside the STARLIGHTv04 directory, where the executable is located
         conf_file = specutils.create_starlight_input_file(
-            data_directory = './../A194/',
+            data_directory = data_dir,
             list_galaxies = galaxies,
-            n_files = 3, 
-            library = 'CB19_16x5')
+            n_files = 1, 
+            library = 'CB19_16x5', 
+            IsErrSpecAvailable = True, 
+            IsFlagSpecAvailable = False)
 
         conf_path = mask_dir / "config.in"
         with open(conf_path, "w") as f:
@@ -167,10 +233,6 @@ def main():
 
 
 
-
-    
-
- 
 
 
 if __name__ == "__main__":
