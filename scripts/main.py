@@ -147,7 +147,7 @@ def main():
         print(" -> Starlight fits and png files already exist.\n")
     else:
         print(f' -> Reading Starlight output... \n')
-        starlight_output = specutils.read_starlight_output(files, filepath=str(data_dir) + '/')
+        starlight_output = spectrum_io.read_starlight_output(files, filepath=str(data_dir) + '/')
 
         with open(starlight_output_file, 'w') as f:
             json.dump(starlight_output, f)
@@ -158,7 +158,7 @@ def main():
             fig.savefig(data_dir / f"{galaxy}_starlight.png")
             plt.close(fig)
 
-            new_fits = specutils.create_new_fits_from_starlight(data)
+            new_fits = spectrum_io.create_new_fits_from_starlight(data)
             new_fits.writeto(data_dir / f'{galaxy}_starlight.fits', overwrite=True)
 
 
@@ -232,6 +232,20 @@ def main():
         json.dump(ifscube_output, f)
 
 
+
+    # ---------------------------------------> Emssion lines parameters estimations <-----------------------------------------------
+    print(f' -> Estimating emission lines parameters... \n')
+    parameter_estimations = analisys.estimate_emission_line_parameters(ifscube_output)
+
+    df_param_estimations = pd.DataFrame.from_dict(parameter_estimations, orient='index')
+    df_param_estimations.index.name = 'galaxy'
+    param_keys = [param.keys() for _, param in parameter_estimations.items()]
+
+
+
+    print(f' -> Parameter estimations: {df_param_estimations} \n')
+
+   
 
 
 

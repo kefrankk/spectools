@@ -347,11 +347,13 @@ def make_line(rest_wavelength, velocity=None, sigma=None, amplitude="peak, 0:", 
 
 def plot_starlight_spectrum(data):
     metadata    = data['metadata']
+    fobs_norm   = metadata.get('fobs_norm (in input units)')
+
     lam         = np.array(data['wavelenght'])
-    f_obs       = np.array(data['f_obs'])
-    f_model     = np.array(data['f_model'])
-    gas         = np.array(np.array(f_obs) - np.array(f_model))
-    weight     = np.array(data['weight'])
+    f_obs       = np.array(data['f_obs']) * fobs_norm
+    f_model     = np.array(data['f_model']) * fobs_norm
+    gas         = np.array(f_obs - f_model)
+    weight      = np.array(data['weight']) * fobs_norm
 
     limits_list = [(lam > 3750) & (lam < 4050), (lam > 4200) & (lam < 4500), (lam > 6450) & (lam < 6750)]
 

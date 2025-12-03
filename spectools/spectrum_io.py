@@ -313,7 +313,7 @@ def create_starlight_input_file(data_directory='./../A194/', n_files: int = 500,
                                 IsFlagSpecAvailable: bool = False, 
                                 list_galaxies: list = []):
 
-    library = 'CB19_16x5'
+    # library = 'CB19_16x5'
     mask = "mask_sdss.gm"
     if library == 'CB19_16x5':
         template = "CBASE.PARSEC.chab.16x5.all"
@@ -451,9 +451,12 @@ def create_new_fits_from_starlight(data):
         FITS object with OBSERVED, STELLAR, and GAS extensions.
     """
 
-    observed    = data['f_obs']
-    stellar     = data['f_model']
-    gas         = np.array(observed) - np.array(stellar)
+    metadata    = data['metadata']
+    fobs_norm   = metadata.get('fobs_norm (in input units)')
+
+    observed    = np.array(data['f_obs']) * fobs_norm
+    stellar     = np.array(data['f_model']) * fobs_norm
+    gas         = np.array(observed - stellar)
 
     hdu = fits.Header()
     crval = float(data['metadata']['l_ini (A)'])
